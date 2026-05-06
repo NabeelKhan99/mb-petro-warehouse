@@ -1,0 +1,3 @@
+# MB Petro Data Warehouse
+
+An automated data engineering platform that consolidates fragmented provincial petroleum reports into a queryable relational warehouse. Developed using Python, PostgreSQL, and Docker, the system ingests weekly well approvals and historical spill statistics while enforcing Manitoba UWI regulatory standards. By leveraging Apache Airflow for workflow orchestration and implementing regulatory integrity checks, this project provides a scalable solution for correlating drilling activity with environmental risk metrics in a production-oriented environment.
