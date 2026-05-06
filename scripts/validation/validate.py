@@ -23,9 +23,16 @@ UWI_REGEX = re.compile(
 VALID_LOCATION_CODES = {"0", "A", "B", "C", "D", "S", "W"}
 VALID_SEQUENCE_CODES = {"0", "2", "3", "4", "5", "6", "7", "8", "9"}
 VALID_WELL_CLASSES = {"DEV", "DPW", "SWD", "OBS", "INJ", "HZNTL", "PROV", "VERT"}
-VALID_SPILL_SOURCES = {"FLOWLINE", "WELL", "TANK", "PIPELINE", "BATTERY", "OTHER"}
-VALID_SPILL_CAUSES = {"CORROSION", "HEAD", "EQUIPMENT_FAILURE", "HUMAN_ERROR", "WEATHER", "OTHER"}
-SPILL_NO_REGEX = re.compile(r"^\d{4}-\d{2}-[A-Z]$")
+VALID_SPILL_SOURCES = {
+    "FLOWLINE", "WELL", "TANK", "PIPELINE", "BATTERY", "OTHER",
+    "RISER", "TRUCK", "TREATER", "SATELLITE", "INJECTOR",
+}
+
+VALID_SPILL_CAUSES = {
+    "CORROSION", "HEAD", "EQUIPMENT_FAILURE", "HUMAN_ERROR", "WEATHER", "OTHER",
+    "ROLLOVER", "MECHANICAL", "LEAK", "RUPTURE", "OVERFLOW", "UNKNOWN",
+}
+SPILL_NO_REGEX = re.compile(r"^\d{4}-\d{2}(-[A-Z])?$")
 LSD_REGEX = re.compile(r"^\d{2}-\d{2}-\d{2}-\d{2}$")
 
 
@@ -215,10 +222,10 @@ def apply_rule_frm_001(record: dict) -> Tuple[bool, str]:
 
 
 def apply_rule_spl_001(record: dict) -> Tuple[bool, str]:
-    """SPL-001: Spill number must match format."""
+    """SPL-001: Spill number must match format YYYY-NN or YYYY-NN-V."""
     sn = record.get("spill_no", "")
     if not SPILL_NO_REGEX.match(sn.strip()):
-        return False, f"Spill number '{sn}' does not match format YYYY-NN-V"
+        return False, f"Spill number '{sn}' does not match format YYYY-NN or YYYY-NN-V"
     return True, ""
 
 

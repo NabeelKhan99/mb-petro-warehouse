@@ -200,7 +200,7 @@ SPILL_RULES = [
         "rule_id": "SPL-001",
         "category": "SPILL_ID",
         "field": "spill_no",
-        "description": "Spill number must match format YYYY-NN-V where YYYY is year, NN is sequence, V is version",
+        "description": "Spill number must match format YYYY-NN or YYYY-NN-V",
         "severity": "ERROR",
         "reference": "Manitoba Spill Stats reporting format",
         "logic": "Regex: ^\\d{4}-\\d{2}-[A-Z]$",
@@ -296,7 +296,7 @@ SPILL_RULES = [
         "description": "Spill source must be a recognized category",
         "severity": "WARN",
         "reference": "Manitoba Spill Stats classification",
-        "logic": "source in {'FLOWLINE', 'WELL', 'TANK', 'PIPELINE', 'BATTERY', 'OTHER'}",
+        "logic": "source in {'FLOWLINE', 'WELL', 'TANK', 'PIPELINE', 'BATTERY', 'OTHER', 'RISER', 'TRUCK', 'TREATER', 'SATELLITE', 'INJECTOR'}",
     },
     {
         "rule_id": "SPL-011",
@@ -305,7 +305,7 @@ SPILL_RULES = [
         "description": "Spill cause must be a recognized category",
         "severity": "WARN",
         "reference": "Manitoba Spill Stats classification",
-        "logic": "cause in {'CORROSION', 'HEAD', 'EQUIPMENT_FAILURE', 'HUMAN_ERROR', 'WEATHER', 'OTHER'}",
+        "logic": "cause in {'CORROSION', 'HEAD', 'EQUIPMENT_FAILURE', 'HUMAN_ERROR', 'WEATHER', 'OTHER', 'ROLLOVER', 'MECHANICAL', 'LEAK', 'RUPTURE', 'OVERFLOW', 'UNKNOWN'}",
     },
 
     # --- Location Rules ---
