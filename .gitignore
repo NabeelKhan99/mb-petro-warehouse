@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Environment
+.env
+*.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Airflow
+logs/
+airflow.cfg
+airflow.db
+webserver_config.py
+
+# Docker
+docker-compose.override.yml
+
+# Data files (keep structure, ignore content)
+data/archive/*
+data/raw/*
+data/processed/*
+!data/processed/.gitkeep
+
+# Exceptions — keep source PDFs and Excel files in sources/
+# but ignore any extracted intermediate files
+sources/*.csv
+sources/*.json
