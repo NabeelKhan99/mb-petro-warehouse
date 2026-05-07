@@ -9,6 +9,9 @@ build/
 .venv/
 venv/
 env/
+sources/p1.py
+
+
 
 # Environment
 .env
@@ -43,3 +46,5 @@ data/processed/*
 # but ignore any extracted intermediate files
 sources/*.csv
 sources/*.json
+sources/uwi_key_list.pdf
+show-tree.ps1
