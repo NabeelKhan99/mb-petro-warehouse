@@ -277,6 +277,7 @@ CREATE TABLE IF NOT EXISTS gold.fact_spill_incidents (
     spill_id            SERIAL PRIMARY KEY,
     company_id          INTEGER REFERENCES gold.dim_company(company_id),
     date_id             INTEGER REFERENCES gold.dim_date(date_id),
+    spill_date          DATE, 
     spill_no            TEXT NOT NULL,
     source              TEXT,
     cause               TEXT,

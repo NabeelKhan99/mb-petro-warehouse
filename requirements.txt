@@ -9,3 +9,7 @@ python-dotenv==1.0.1
 
 # Quality Assurance
 pytest==8.0.0
+
+# Web Framework
+fastapi
+uvicorn
