@@ -176,6 +176,7 @@ def run_gold_load():
     try:
         # Populate dimensions first (FK dependencies)
         populate_dim_company(conn)
+        populate_dim_well(conn)
 
         # Populate facts
         populate_fact_well_approvals(conn)
@@ -204,7 +205,27 @@ def run_gold_load():
         raise
     finally:
         conn.close()
+        
+def populate_dim_well(conn):
+    """Populate gold.dim_well from silver.uwi_key_list_cleaned with dedup."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO gold.dim_well (
+                licence, uwi, well_name, company, location,
+                field_code, pool_code, status, status_date
+            )
+            SELECT DISTINCT ON (uwi)
+                licence, uwi, well_name, company, location,
+                field_code, pool_code, status, status_date
+            FROM silver.uwi_key_list_cleaned
+            WHERE uwi NOT IN (SELECT uwi FROM gold.dim_well)
+            ORDER BY uwi, status_date DESC NULLS LAST
+            ON CONFLICT (uwi) DO NOTHING
+        """)
+    conn.commit()
+    print("dim_well populated.")
 
 
 if __name__ == "__main__":
     run_gold_load()
+    

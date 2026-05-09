@@ -210,14 +210,69 @@ def load_spills_to_silver():
     finally:
         conn.close()
 
+def load_uwi_to_silver():
+    conn = get_connection()
+    batch_id = str(uuid.uuid4())
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO silver.uwi_key_list_cleaned (
+                    batch_id, bronze_id, source_file, pipeline_version,
+                    licence, location, well_name, uwi, company,
+                    field_code, pool_code, unit_code, multi_flag,
+                    status, status_date, uwi_status, uwi_date
+                )
+                SELECT
+                    %(batch_id)s::UUID,
+                    b.id,
+                    'uwi_data.json',
+                    '1.2.0',
+                    b.raw_payload->>'licence',
+                    b.raw_payload->>'location',
+                    b.raw_payload->>'well_name',
+                    b.raw_payload->>'uwi',
+                    b.raw_payload->>'company',
+                    b.raw_payload->>'field',
+                    NULLIF(b.raw_payload->>'pool', ''),
+                    b.raw_payload->>'unit',
+                    b.raw_payload->>'multi',
+                    b.raw_payload->>'status',
+                    NULLIF(b.raw_payload->>'status_date', '')::DATE,,
+                    b.raw_payload->>'uwi_status',
+                    NULLIF(b.raw_payload->>'status_date', '')::DATE,
+                FROM bronze.uwi_key_list_raw b
+                WHERE b.raw_payload->>'licence' NOT IN (
+                    SELECT licence FROM silver.uwi_key_list_cleaned
+                )
+            """, {"batch_id": batch_id})
+
+            cur.execute(
+                "SELECT COUNT(*) FROM silver.uwi_key_list_cleaned WHERE batch_id = %s",
+                (batch_id,)
+            )
+            count = cur.fetchone()[0]
+
+        conn.commit()
+        log_silver_run(conn, batch_id, "uwi_key_list", "SUCCESS", count, count, 0)
+        print(json.dumps({"batch_id": batch_id, "inserted": count}, indent=2))
+    except Exception as e:
+        conn.rollback()
+        log_silver_run(conn, batch_id, "uwi_key_list", "FAILED", 0, 0, 0, str(e)[:500])
+        raise
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("dataset", choices=["well_approvals", "spills"])
+    parser.add_argument("dataset", choices=["well_approvals", "spills", "uwi_key_list"])
     args = parser.parse_args()
 
     if args.dataset == "well_approvals":
         load_wells_to_silver()
+    
+    if args.dataset == "uwi_key_list":
+        load_uwi_to_silver()
+    
     else:
         load_spills_to_silver()

@@ -286,6 +286,89 @@ def load_spills(
         raise
     finally:
         conn.close()
+        
+def load_uwi_key_list(
+    json_path: str,
+    pipeline_version: str = "1.0.0",
+) -> Dict:
+    """
+    Load UWI Key List JSON into bronze.uwi_key_list_raw.
+    The JSON structure is:
+      {
+        "report_title": "...",
+        "province": "...",
+        "records": [{...}, {...}, ...]
+      }
+    Each record in 'records' array is stored as a raw_payload JSONB row.
+    """
+    conn = get_connection()
+    batch_id = str(uuid.uuid4())
+    source_file = os.path.basename(json_path)
+
+    try:
+        with open(json_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+
+        records = data.get("records", [])
+        total = len(records)
+
+        # Process in chunks to avoid memory issues with 44k records
+        chunk_size = 500
+        total_inserted = 0
+        total_skipped = 0
+
+        for i in range(0, total, chunk_size):
+            chunk = records[i:i + chunk_size]
+            inserted, skipped = insert_records(
+                conn=conn,
+                table_name="uwi_key_list_raw",
+                batch_id=batch_id,
+                source_file=source_file,
+                pipeline_version=pipeline_version,
+                records=chunk,
+            )
+            total_inserted += inserted
+            total_skipped += skipped
+            print(f"  Chunk {i//chunk_size + 1}: {inserted} inserted, {skipped} skipped")
+
+        log_pipeline_run(
+            conn=conn,
+            batch_id=batch_id,
+            pipeline_version=pipeline_version,
+            source_file=source_file,
+            layer="BRONZE",
+            status="SUCCESS",
+            total_records=total,
+            passed_records=total_inserted,
+            failed_records=total_skipped,
+            notes=f"Loaded {total_inserted} UWI Key List records",
+        )
+
+        return {
+            "batch_id": batch_id,
+            "total": total,
+            "inserted": total_inserted,
+            "skipped": total_skipped,
+            "status": "SUCCESS",
+        }
+
+    except Exception as exc:
+        conn.rollback()
+        log_pipeline_run(
+            conn=conn,
+            batch_id=batch_id,
+            pipeline_version=pipeline_version,
+            source_file=source_file,
+            layer="BRONZE",
+            status="FAILED",
+            total_records=0,
+            passed_records=0,
+            failed_records=0,
+            notes=str(exc)[:500],
+        )
+        raise
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +382,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "dataset",
-        choices=["well_approvals", "spills"],
+        choices=["well_approvals", "spills", "uwi_key_list"],
         help="Which dataset to load",
     )
     parser.add_argument(
@@ -316,6 +399,7 @@ if __name__ == "__main__":
     loaders = {
         "well_approvals": load_well_approvals,
         "spills": load_spills,
+        "uwi_key_list": load_uwi_key_list,
     }
 
     loader = loaders[args.dataset]

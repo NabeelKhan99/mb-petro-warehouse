@@ -155,6 +155,27 @@ CREATE INDEX IF NOT EXISTS idx_bronze_spills_record_hash ON bronze.spills_raw(re
 CREATE INDEX IF NOT EXISTS idx_bronze_spills_spill_no ON bronze.spills_raw(spill_no);
 CREATE INDEX IF NOT EXISTS idx_bronze_spills_company ON bronze.spills_raw(company_raw);
 
+-- UWI Key List raw — complete Manitoba well registry
+CREATE TABLE IF NOT EXISTS bronze.uwi_key_list_raw (
+    id                  SERIAL PRIMARY KEY,
+    batch_id            UUID NOT NULL,
+    source_file         TEXT NOT NULL,
+    ingested_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    pipeline_version    TEXT NOT NULL DEFAULT '1.0.0',
+    raw_payload         JSONB NOT NULL,
+    record_hash         TEXT NOT NULL,
+    licence             TEXT GENERATED ALWAYS AS (raw_payload ->> 'licence') STORED,
+    uwi                 TEXT GENERATED ALWAYS AS (raw_payload ->> 'uwi') STORED,
+    company             TEXT GENERATED ALWAYS AS (raw_payload ->> 'company') STORED,
+    status              TEXT GENERATED ALWAYS AS (raw_payload ->> 'status') STORED
+);
+CREATE INDEX IF NOT EXISTS idx_uwi_batch_id ON bronze.uwi_key_list_raw(batch_id);
+CREATE INDEX IF NOT EXISTS idx_uwi_licence ON bronze.uwi_key_list_raw(licence);
+CREATE INDEX IF NOT EXISTS idx_uwi_uwi ON bronze.uwi_key_list_raw(uwi);
+CREATE INDEX IF NOT EXISTS idx_uwi_company ON bronze.uwi_key_list_raw(company);
+CREATE INDEX IF NOT EXISTS idx_uwi_status ON bronze.uwi_key_list_raw(status);
+
+
 -- ============================================================
 -- SILVER LAYER
 -- ============================================================
@@ -216,6 +237,33 @@ CREATE TABLE IF NOT EXISTS silver.spills_cleaned (
 CREATE INDEX IF NOT EXISTS idx_silver_spills_spill_no ON silver.spills_cleaned(spill_no);
 CREATE INDEX IF NOT EXISTS idx_silver_spills_company ON silver.spills_cleaned(company);
 CREATE INDEX IF NOT EXISTS idx_silver_spills_batch_id ON silver.spills_cleaned(batch_id);
+
+CREATE TABLE IF NOT EXISTS silver.uwi_key_list_cleaned (
+    id                  SERIAL PRIMARY KEY,
+    batch_id            UUID NOT NULL,
+    bronze_id           INTEGER REFERENCES bronze.uwi_key_list_raw(id),
+    source_file         TEXT NOT NULL,
+    ingested_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    pipeline_version    TEXT NOT NULL DEFAULT '1.0.0',
+    licence             TEXT NOT NULL,
+    location            TEXT,
+    well_name           TEXT,
+    uwi                 TEXT NOT NULL,
+    company             TEXT,
+    field_code          TEXT,
+    pool_code           TEXT,
+    unit_code           TEXT,
+    multi_flag          TEXT,
+    status              TEXT,
+    status_date         DATE,
+    uwi_status          TEXT,
+    uwi_date            DATE
+);
+
+CREATE INDEX IF NOT EXISTS idx_silver_uwi_licence ON silver.uwi_key_list_cleaned(licence);
+CREATE INDEX IF NOT EXISTS idx_silver_uwi_uwi ON silver.uwi_key_list_cleaned(uwi);
+CREATE INDEX IF NOT EXISTS idx_silver_uwi_company ON silver.uwi_key_list_cleaned(company);
+CREATE INDEX IF NOT EXISTS idx_silver_uwi_status ON silver.uwi_key_list_cleaned(status);
 
 -- ============================================================
 -- GOLD LAYER
@@ -290,6 +338,22 @@ CREATE TABLE IF NOT EXISTS gold.fact_spill_incidents (
     off_lease_area_m2   NUMERIC(10,2),
     validation_passed   BOOLEAN
 );
+
+-- DIM: Well — complete well registry from UWI Key List
+CREATE TABLE IF NOT EXISTS gold.dim_well (
+    well_id         SERIAL PRIMARY KEY,
+    licence         TEXT NOT NULL,
+    uwi             TEXT NOT NULL UNIQUE,
+    well_name       TEXT,
+    company         TEXT,
+    location        TEXT,
+    field_code      TEXT,
+    pool_code       TEXT,
+    status          TEXT,
+    status_date     DATE,
+    source          TEXT DEFAULT 'UWI_KEY_LIST'
+);
+
 
 -- ============================================================
 -- GOLD VIEWS
@@ -379,6 +443,26 @@ SELECT
     0 AS fail_check_4,
     COUNT(*) FILTER (WHERE check_company = 'FAIL') AS fail_check_5
 FROM gold.v_regulatory_compliance_spills;
+
+-- Data Quality Summary
+CREATE OR REPLACE VIEW gold.v_data_quality_summary AS
+SELECT
+    source_table,
+    completeness_pct,
+    uniqueness_pct,
+    validity_pct,
+    timeliness_pct,
+    overall_score,
+    CASE
+        WHEN overall_score >= 95 THEN 'EXCELLENT'
+        WHEN overall_score >= 85 THEN 'GOOD'
+        WHEN overall_score >= 70 THEN 'FAIR'
+        ELSE 'POOR'
+    END AS quality_rating,
+    calculated_at
+FROM audit.data_quality_metrics
+ORDER BY calculated_at DESC;
+
 
 -- Company spill-to-approval KPI
 CREATE OR REPLACE VIEW gold.v_company_spill_kpi AS
@@ -472,6 +556,30 @@ LEFT JOIN (
 ) cs ON c.company_id = cs.company_id
 WHERE COALESCE(ca.total_approvals, 0) > 0 OR COALESCE(cs.total_spills, 0) > 0
 ORDER BY spill_to_approval_ratio DESC NULLS LAST;
+
+-- Enriched KPI
+CREATE OR REPLACE VIEW gold.v_company_spill_kpi_enriched AS
+WITH company_well_status AS (
+    SELECT
+        COALESCE(dc.display_name, dw.company) AS company_name,
+        COUNT(*) AS total_wells,
+        COUNT(*) FILTER (WHERE dw.status = 'COOP') AS active_wells,
+        COUNT(*) FILTER (WHERE dw.status LIKE 'ABD%') AS abandoned_wells,
+        COUNT(*) FILTER (WHERE dw.status IN ('WIW', 'SWD', 'WSW')) AS injection_wells,
+        COUNT(*) FILTER (WHERE dw.status LIKE 'SUSP%') AS suspended_wells
+    FROM gold.dim_well dw
+    LEFT JOIN gold.dim_company dc ON dw.company = dc.company_name
+    WHERE dw.company IS NOT NULL
+    GROUP BY COALESCE(dc.display_name, dw.company)
+)
+SELECT
+    v.*,
+    COALESCE(ws.total_wells, 0) AS total_wells,
+    COALESCE(ws.active_wells, 0) AS active_wells,
+    COALESCE(ws.abandoned_wells, 0) AS abandoned_wells
+FROM gold.v_company_spill_kpi v
+LEFT JOIN company_well_status ws ON v.company_name = ws.company_name;
+
 
 -- ============================================================
 -- SEED DATA: Well Status Reference

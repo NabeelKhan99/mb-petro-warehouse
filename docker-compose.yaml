@@ -8,10 +8,18 @@ x-airflow-common: &airflow-common
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/mb_petro
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__WEBSERVER__SECRET_KEY: 'random_secret'
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_USER: airflow
+    DB_PASSWORD: airflow
+    DB_NAME: mb_petro_warehouse
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ./scripts:/opt/airflow/scripts
+    - ./data:/opt/airflow/data
+    - ./requirements.txt:/opt/airflow/requirements.txt
   depends_on:
     - postgres
 
@@ -33,6 +41,7 @@ services:
     container_name: airflow_init
     command: >
       bash -c "
+      pip install psycopg2-binary &&
       airflow db migrate &&
       airflow users create --username airflow --password airflow --firstname Admin --lastname User --role Admin --email admin@example.com
       "
