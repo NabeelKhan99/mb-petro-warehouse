@@ -111,7 +111,7 @@ def populate_fact_well_approvals(conn):
                 w.licence_issued,
                 w.validation_passed
             FROM silver.well_approvals_cleaned w
-            LEFT JOIN gold.dim_company c ON w.licensee = c.company_name
+            LEFT JOIN gold.dim_company c ON w.licensee = c.display_name
             LEFT JOIN gold.dim_date d ON w.licence_issued = d.full_date
             WHERE w.licence_id NOT IN (
                 SELECT licence_id FROM gold.fact_well_approvals
@@ -157,7 +157,7 @@ def populate_fact_spill_incidents(conn):
                 s.off_lease_area_m2,
                 s.validation_passed
             FROM silver.spills_cleaned s
-            LEFT JOIN gold.dim_company c ON s.company = c.company_name
+            LEFT JOIN gold.dim_company c ON s.company = c.display_name
             LEFT JOIN gold.dim_date d ON s.spill_date = d.full_date
             WHERE s.spill_no NOT IN (
                 SELECT spill_no FROM gold.fact_spill_incidents
@@ -165,6 +165,27 @@ def populate_fact_spill_incidents(conn):
         """)
     conn.commit()
     print("fact_spill_incidents populated.")
+
+
+def populate_dim_well(conn):
+    """Populate gold.dim_well from silver.uwi_key_list_cleaned with dedup."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO gold.dim_well (
+                licence, uwi, well_name, company, location,
+                field_code, pool_code, status, status_date
+            )
+            SELECT DISTINCT ON (uwi)
+                licence, uwi, well_name, company, location,
+                field_code, pool_code, status, status_date
+            FROM silver.uwi_key_list_cleaned
+            WHERE uwi NOT IN (SELECT uwi FROM gold.dim_well)
+            ORDER BY uwi, status_date DESC NULLS LAST
+            ON CONFLICT (uwi) DO NOTHING
+        """)
+    conn.commit()
+    print("dim_well populated.")
+
 
 
 def run_gold_load():
@@ -206,24 +227,7 @@ def run_gold_load():
     finally:
         conn.close()
         
-def populate_dim_well(conn):
-    """Populate gold.dim_well from silver.uwi_key_list_cleaned with dedup."""
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO gold.dim_well (
-                licence, uwi, well_name, company, location,
-                field_code, pool_code, status, status_date
-            )
-            SELECT DISTINCT ON (uwi)
-                licence, uwi, well_name, company, location,
-                field_code, pool_code, status, status_date
-            FROM silver.uwi_key_list_cleaned
-            WHERE uwi NOT IN (SELECT uwi FROM gold.dim_well)
-            ORDER BY uwi, status_date DESC NULLS LAST
-            ON CONFLICT (uwi) DO NOTHING
-        """)
-    conn.commit()
-    print("dim_well populated.")
+
 
 
 if __name__ == "__main__":

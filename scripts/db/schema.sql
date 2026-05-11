@@ -561,25 +561,26 @@ ORDER BY spill_to_approval_ratio DESC NULLS LAST;
 CREATE OR REPLACE VIEW gold.v_company_spill_kpi_enriched AS
 WITH company_well_status AS (
     SELECT
-        COALESCE(dc.display_name, dw.company) AS company_name,
+        COALESCE(dc.display_name, dc.company_name) AS canonical_name,
         COUNT(*) AS total_wells,
         COUNT(*) FILTER (WHERE dw.status = 'COOP') AS active_wells,
         COUNT(*) FILTER (WHERE dw.status LIKE 'ABD%') AS abandoned_wells,
         COUNT(*) FILTER (WHERE dw.status IN ('WIW', 'SWD', 'WSW')) AS injection_wells,
         COUNT(*) FILTER (WHERE dw.status LIKE 'SUSP%') AS suspended_wells
     FROM gold.dim_well dw
-    LEFT JOIN gold.dim_company dc ON dw.company = dc.company_name
+    JOIN gold.dim_company dc ON dw.company = dc.company_name
     WHERE dw.company IS NOT NULL
-    GROUP BY COALESCE(dc.display_name, dw.company)
+    GROUP BY COALESCE(dc.display_name, dc.company_name)
 )
 SELECT
     v.*,
     COALESCE(ws.total_wells, 0) AS total_wells,
     COALESCE(ws.active_wells, 0) AS active_wells,
-    COALESCE(ws.abandoned_wells, 0) AS abandoned_wells
+    COALESCE(ws.abandoned_wells, 0) AS abandoned_wells,
+    COALESCE(ws.injection_wells, 0) AS injection_wells,
+    COALESCE(ws.suspended_wells, 0) AS suspended_wells
 FROM gold.v_company_spill_kpi v
-LEFT JOIN company_well_status ws ON v.company_name = ws.company_name;
-
+LEFT JOIN company_well_status ws ON v.company_name = ws.canonical_name;
 
 -- ============================================================
 -- SEED DATA: Well Status Reference
@@ -686,3 +687,17 @@ INSERT INTO audit.metadata_catalog (schema_name, table_name, column_name, data_t
     ('gold', 'fact_spill_incidents', 'oil_vol_bbl', 'NUMERIC', 'Oil spilled (barrels)', 'Environmental impact metric', NULL, 'PUBLIC'),
     ('gold', 'fact_spill_incidents', 'recovered_vol_bbl', 'NUMERIC', 'Volume recovered (barrels)', 'Cleanup effectiveness metric', NULL, 'PUBLIC')
 ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================
+-- GOLD LAYER: Company Name Standardization
+-- Ensures cross-dataset joins work by mapping short names
+-- (from spills/uwi) to legal names (from well approvals)
+-- ============================================================
+UPDATE gold.dim_company
+SET display_name = CASE
+    WHEN company_name = 'Tundra' THEN 'TUNDRA OIL & GAS LIMITED'
+    WHEN company_name = 'Corex' THEN 'COREX RESOURCES LTD.'
+    WHEN company_name = 'Melita' THEN 'MELITA RESOURCES LTD.'
+    ELSE company_name
+END
+WHERE display_name IS NULL;

@@ -237,9 +237,9 @@ def load_uwi_to_silver():
                     b.raw_payload->>'unit',
                     b.raw_payload->>'multi',
                     b.raw_payload->>'status',
-                    NULLIF(b.raw_payload->>'status_date', '')::DATE,,
-                    b.raw_payload->>'uwi_status',
                     NULLIF(b.raw_payload->>'status_date', '')::DATE,
+                    b.raw_payload->>'uwi_status',
+                    NULLIF(b.raw_payload->>'uwi_date', '')::DATE
                 FROM bronze.uwi_key_list_raw b
                 WHERE b.raw_payload->>'licence' NOT IN (
                     SELECT licence FROM silver.uwi_key_list_cleaned
@@ -270,9 +270,7 @@ if __name__ == "__main__":
 
     if args.dataset == "well_approvals":
         load_wells_to_silver()
-    
-    if args.dataset == "uwi_key_list":
-        load_uwi_to_silver()
-    
-    else:
+    elif args.dataset == "spills":
         load_spills_to_silver()
+    elif args.dataset == "uwi_key_list":
+        load_uwi_to_silver()
