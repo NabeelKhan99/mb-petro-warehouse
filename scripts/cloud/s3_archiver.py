@@ -8,9 +8,11 @@ Usage:
     python s3_archiver.py sources/new_well_license_approvals_coordinates.pdf
 """
 
+import mimetypes
 import sys
 import os
 from datetime import datetime
+from xmlrpc import client
 from minio import Minio
 from minio.error import S3Error
 
@@ -54,7 +56,11 @@ def upload_file(file_path: str):
     object_name = f"{timestamp}_{file_name}"
 
     try:
-        client.fput_object(bucket, object_name, file_path)
+        content_type, _ = mimetypes.guess_type(file_path)
+        client.fput_object(
+                    bucket, object_name, file_path,
+                content_type=content_type or "application/octet-stream",
+                )
         print(f"Uploaded: {file_path} -> s3://{bucket}/{object_name}")
     except S3Error as e:
         print(f"ERROR: {e}")

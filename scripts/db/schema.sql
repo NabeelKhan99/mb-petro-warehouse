@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS bronze.well_approvals_raw (
 CREATE INDEX IF NOT EXISTS idx_bronze_well_batch_id ON bronze.well_approvals_raw(batch_id);
 CREATE INDEX IF NOT EXISTS idx_bronze_well_ingested_at ON bronze.well_approvals_raw(ingested_at);
 CREATE INDEX IF NOT EXISTS idx_bronze_well_record_hash ON bronze.well_approvals_raw(record_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bronze_well_record_hash_unique ON bronze.well_approvals_raw(record_hash);
 
 -- Spills raw — extracted from Spill Stats PDF
 CREATE TABLE IF NOT EXISTS bronze.spills_raw (
@@ -154,6 +155,7 @@ CREATE INDEX IF NOT EXISTS idx_bronze_spills_ingested_at ON bronze.spills_raw(in
 CREATE INDEX IF NOT EXISTS idx_bronze_spills_record_hash ON bronze.spills_raw(record_hash);
 CREATE INDEX IF NOT EXISTS idx_bronze_spills_spill_no ON bronze.spills_raw(spill_no);
 CREATE INDEX IF NOT EXISTS idx_bronze_spills_company ON bronze.spills_raw(company_raw);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bronze_spills_record_hash_unique ON bronze.spills_raw(record_hash);
 
 -- UWI Key List raw — complete Manitoba well registry
 CREATE TABLE IF NOT EXISTS bronze.uwi_key_list_raw (
@@ -174,6 +176,7 @@ CREATE INDEX IF NOT EXISTS idx_uwi_licence ON bronze.uwi_key_list_raw(licence);
 CREATE INDEX IF NOT EXISTS idx_uwi_uwi ON bronze.uwi_key_list_raw(uwi);
 CREATE INDEX IF NOT EXISTS idx_uwi_company ON bronze.uwi_key_list_raw(company);
 CREATE INDEX IF NOT EXISTS idx_uwi_status ON bronze.uwi_key_list_raw(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bronze_uwi_record_hash_unique ON bronze.uwi_key_list_raw(record_hash);
 
 
 -- ============================================================

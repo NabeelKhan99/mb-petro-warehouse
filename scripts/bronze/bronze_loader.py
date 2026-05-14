@@ -41,14 +41,7 @@ def compute_hash(record: dict) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def record_exists(conn, table_name: str, record_hash: str) -> bool:
-    """Check if a record with the given hash already exists in the Bronze table."""
-    query = sql.SQL("SELECT 1 FROM {} WHERE record_hash = %s LIMIT 1").format(
-        sql.Identifier("bronze", table_name)
-    )
-    with conn.cursor() as cur:
-        cur.execute(query, (record_hash,))
-        return cur.fetchone() is not None
+
 
 
 def insert_records(
@@ -60,48 +53,43 @@ def insert_records(
     records: List[dict],
 ) -> Tuple[int, int]:
     """
-    Insert records into a Bronze table.
+    Insert records into a Bronze table using ON CONFLICT for deduplication.
     Returns (inserted_count, skipped_count).
-    Deduplicates by record_hash before inserting.
     """
-    inserted = 0
-    skipped = 0
-    rows_to_insert = []
-
-    for record in records:
-        record_hash = compute_hash(record)
-        if record_exists(conn, table_name, record_hash):
-            skipped += 1
-            continue
-        rows_to_insert.append((
+    total = len(records)
+    rows_to_insert = [
+        (
             batch_id,
             source_file,
             datetime.now(timezone.utc),
             pipeline_version,
             json.dumps(record, ensure_ascii=False),
-            record_hash,
-        ))
-        inserted += 1
+            compute_hash(record),
+        )
+        for record in records
+    ]
 
-    if rows_to_insert:
+    with conn.cursor() as cur:
         insert_sql = sql.SQL("""
             INSERT INTO {} (
                 batch_id, source_file, ingested_at,
                 pipeline_version, raw_payload, record_hash
             )
             VALUES %s
+            ON CONFLICT (record_hash) DO NOTHING
         """).format(sql.Identifier("bronze", table_name))
 
-        with conn.cursor() as cur:
-            execute_values(
-                cur,
-                insert_sql,
-                rows_to_insert,
-                template="(%s, %s, %s, %s, %s, %s)",
-                page_size=100,
-            )
-        conn.commit()
+        execute_values(
+            cur,
+            insert_sql,
+            rows_to_insert,
+            template="(%s, %s, %s, %s, %s, %s)",
+            page_size=100,
+        )
+        inserted = cur.rowcount
 
+    conn.commit()
+    skipped = total - inserted
     return inserted, skipped
 
 

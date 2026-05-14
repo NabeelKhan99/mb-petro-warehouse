@@ -3,7 +3,6 @@ Silver Layer Loader
 Reads Bronze records, parses raw_block or type-casts fields,
 validates, and inserts into Silver tables.
 """
-
 import sys
 import os
 import json
@@ -12,10 +11,12 @@ from datetime import datetime, timezone
 from typing import Dict, List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "validation"))
 
 import psycopg2
 from psycopg2.extras import execute_values
 from well_parser import parse_raw_block
+from validate import validate_record # noqa: E402  # pylint: disable=import-error
 
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "127.0.0.1"),
@@ -104,9 +105,13 @@ def insert_silver_wells(conn, batch_id: str, records: List[dict]) -> int:
 
 
 def insert_silver_spills(conn, batch_id: str, records: List[dict]) -> int:
-    """Type-cast and insert spills into silver.spills_cleaned."""
+    """Type-cast and insert spills into silver.spills_cleaned with real validation."""
     rows = []
+    failed = 0
     for rec in records:
+        passed, violations = validate_record(rec, "spills")
+        warnings = [v for v in violations if v["severity"] == "WARN"]
+
         spill_date = None
         raw_date = rec.get("spill_date", "")
         if raw_date:
@@ -135,9 +140,14 @@ def insert_silver_spills(conn, batch_id: str, records: List[dict]) -> int:
             float(rec.get("recovered_vol", 0) or 0),
             float(rec.get("total_area", 0) or 0),
             float(rec.get("off_lease_area", 0) or 0),
-            True,  # validation_passed
-            0,     # validation_warnings
+            passed,
+            len(warnings),
         ))
+
+        if not passed:
+            failed += 1
+            rec["_violations"] = violations
+            rec["_validation_passed"] = False
 
     with conn.cursor() as cur:
         execute_values(
@@ -154,7 +164,9 @@ def insert_silver_spills(conn, batch_id: str, records: List[dict]) -> int:
             page_size=50,
         )
     conn.commit()
+    print(f"  Inserted {len(rows)} spills, {failed} with validation failures")
     return len(rows)
+  
 
 
 def log_silver_run(conn, batch_id, source_table, status, total, passed, failed, notes=""):
@@ -241,8 +253,9 @@ def load_uwi_to_silver():
                     b.raw_payload->>'uwi_status',
                     NULLIF(b.raw_payload->>'uwi_date', '')::DATE
                 FROM bronze.uwi_key_list_raw b
-                WHERE b.raw_payload->>'licence' NOT IN (
-                    SELECT licence FROM silver.uwi_key_list_cleaned
+                    WHERE NOT EXISTS (
+                    SELECT 1 FROM silver.uwi_key_list_cleaned s
+                    WHERE s.licence = b.raw_payload->>'licence'
                 )
             """, {"batch_id": batch_id})
 

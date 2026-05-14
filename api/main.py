@@ -10,7 +10,7 @@ Usage:
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
@@ -41,13 +41,17 @@ def get_connection():
 
 def query(sql, params=None):
     """Execute a query and return results as list of dicts."""
-    conn = get_connection()
+    conn = None
     try:
+        conn = get_connection()
         with conn.cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 # ---------------------------------------------------------------------------

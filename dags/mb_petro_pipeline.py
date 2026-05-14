@@ -33,12 +33,11 @@ with DAG(
     
     create_db = BashOperator(
     task_id="create_database",
-    bash_command="PGPASSWORD=airflow psql -h postgres -U airflow -d mb_petro -c 'CREATE DATABASE mb_petro_warehouse' 2>/dev/null; true",
-)
+    bash_command="PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d mb_petro -c 'CREATE DATABASE mb_petro_warehouse' 2>/dev/null; true",)
     
     init_db = BashOperator(
         task_id="init_database",
-        bash_command="cat /opt/airflow/scripts/db/schema.sql | PGPASSWORD=airflow psql -h postgres -U airflow -d mb_petro_warehouse",
+        bash_command="cat /opt/airflow/scripts/db/schema.sql | PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d mb_petro_warehouse",
   )
 
     # Load Bronze
@@ -71,4 +70,8 @@ with DAG(
 
     end = EmptyOperator(task_id="end")
 
-start >> create_db >> init_db >> load_bronze_wells >> load_bronze_spills >> load_silver_spills >> load_silver_wells >> load_gold >> end
+start >> create_db >> init_db
+init_db >> [load_bronze_wells, load_bronze_spills]
+load_bronze_wells >> load_silver_wells
+load_bronze_spills >> load_silver_spills
+[load_silver_wells, load_silver_spills] >> load_gold >> end
