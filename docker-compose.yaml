@@ -41,7 +41,7 @@ services:
     container_name: airflow_init
     command: >
       bash -c "
-      pip install psycopg2-binary &&
+      pip install psycopg2-binary minio &&
       airflow db migrate &&
       airflow users create --username airflow --password airflow --firstname Admin --lastname User --role Admin --email admin@example.com
       "

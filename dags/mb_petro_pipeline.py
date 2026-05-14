@@ -69,9 +69,14 @@ with DAG(
     )
 
     end = EmptyOperator(task_id="end")
+    
+    archive = BashOperator(
+        task_id="archive_to_s3",
+        bash_command="cd /opt/airflow/scripts/cloud && MINIO_ENDPOINT=minio:9000 python s3_archiver.py /opt/airflow/data/processed/well_approvals.json && MINIO_ENDPOINT=minio:9000 python s3_archiver.py /opt/airflow/data/processed/bronze_spills.json",
+    )
 
 start >> create_db >> init_db
 init_db >> [load_bronze_wells, load_bronze_spills]
 load_bronze_wells >> load_silver_wells
 load_bronze_spills >> load_silver_spills
-[load_silver_wells, load_silver_spills] >> load_gold >> end
+[load_silver_wells, load_silver_spills] >> load_gold >> archive >> end
