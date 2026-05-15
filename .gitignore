@@ -48,3 +48,4 @@ sources/*.csv
 sources/*.json
 sources/uwi_key_list.pdf
 show-tree.ps1
+.pytest_cache/
